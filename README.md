@@ -8,7 +8,7 @@ Users are responsible for providing their own shop stock, obtained from WoTC, vi
 [Ratatui]: https://ratatui.rs
 
 ### To do
-- [] Finish implementing special stock selector - this can be a scroll or an item
-- [] Swap to sqlite instead of reading CSV into memory and holding structs for app runtime - will also allow better querying of items
-- [] Use `rand::distributions::WeightedIndex` to properly weight shop stock selection. There should be more low level scrolls and low rarity items than high level/rarity.
-- [] ASCII art?
+- [ ] Finish implementing special stock selector - this can be a scroll or an item
+- [ ] Swap to sqlite instead of reading CSV into memory and holding structs for app runtime - will also allow better querying of items
+- [ ] Use `rand::distributions::WeightedIndex` to properly weight shop stock selection. There should be more low level scrolls and low rarity items than high level/rarity.
+- [ ] ASCII art?
