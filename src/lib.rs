@@ -1,2 +1,2 @@
-pub mod ui;
 pub mod shop;
+pub mod ui;

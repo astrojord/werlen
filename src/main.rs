@@ -1,4 +1,4 @@
-use werlen::shop::{App};
+use werlen::shop::App;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
