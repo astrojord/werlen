@@ -1,6 +1,6 @@
 use rand::seq::IndexedRandom;
 use std::path::PathBuf;
-use std::{error::Error, process};
+use std::{error::Error, fmt, process};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::Style;
@@ -21,25 +21,25 @@ pub struct App {
     stock_error: bool,
 
     /// What tab are we looking at? (mod 4)
-    tab: usize,
+    pub tab: usize,
 
     /// Settings
-    max_scrolls: usize,
-    max_scroll_level: usize,
-    max_items: usize,
-    max_item_rarity: Rarity,
-    max_specials: usize,
-    max_special_rarity: Rarity,
-    stock_source: PathBuf,
+    pub max_scrolls: usize,
+    pub max_scroll_level: usize,
+    pub max_items: usize,
+    pub max_item_rarity: Rarity,
+    pub max_specials: usize,
+    pub max_special_rarity: Rarity,
+    pub stock_source: PathBuf,
 
     // Stock pools, populated from stock source
     scroll_stock_pool: Vec<StockItem>,
     item_stock_pool: Vec<StockItem>,
 
     /// Current shop stock, taken from pools
-    scroll_stock: Vec<StockItem>,
-    item_stock: Vec<StockItem>,
-    special_stock: Vec<StockItem>,
+    pub scroll_stock: Vec<StockItem>,
+    pub item_stock: Vec<StockItem>,
+    pub special_stock: Vec<StockItem>,
 }
 
 impl App {
@@ -227,7 +227,7 @@ impl App {
         // select new stocks
         while self.item_stock.len() < self.max_items {
             let chosen_item = self.item_stock_pool.choose(&mut rng).unwrap();
-            if chosen_item.rarity < Some(self.max_item_rarity) {
+            if chosen_item.rarity <= Some(self.max_item_rarity) {
                 self.item_stock.push(chosen_item.clone());
             }
         }
@@ -236,7 +236,7 @@ impl App {
             // 9 1st, 5 2nd, 3 3rd, 2 4th, 1 5th for a max of 20 with max level 5?
             // would be better to just weight the individual levels
             let chosen_scroll = self.scroll_stock_pool.choose(&mut rng).unwrap();
-            if chosen_scroll.level < Some(self.max_scroll_level) {
+            if chosen_scroll.level <= Some(self.max_scroll_level) {
                 self.scroll_stock.push(chosen_scroll.clone());
             }
         }
@@ -244,6 +244,9 @@ impl App {
         //while self.special_stock.len() < self.max_specials {
         //    todo!()
         //};
+
+        self.scroll_stock.sort_by_key(|item| item.level.unwrap());
+        self.item_stock.sort_by_key(|item| item.rarity.unwrap());
     }
 
     /// Set running to false to quit the application.
@@ -262,11 +265,17 @@ pub enum Rarity {
     Legendary,
 }
 
+impl fmt::Display for Rarity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StockItem {
-    level: Option<usize>,
-    rarity: Option<Rarity>,
-    name: String,
-    category: String,
-    price: usize,
+    pub level: Option<usize>,
+    pub rarity: Option<Rarity>,
+    pub name: String,
+    pub category: String,
+    pub price: usize,
 }
