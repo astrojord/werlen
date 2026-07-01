@@ -36,7 +36,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 pub fn render_tabs(frame: &mut Frame, area: Rect, selected_tab: usize) {
     let tabs = Tabs::new(vec!["Scrolls", "Items", "Specials", "Settings"])
         .style(Color::White)
-        .highlight_style(Style::default().magenta().on_black().bold())
+        .highlight_style(Style::default().magenta().bold())
         .select(selected_tab)
         .divider(symbols::DOT)
         .padding(" ", " ");
