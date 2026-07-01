@@ -55,7 +55,7 @@ impl App {
             max_item_rarity: Rarity::Uncommon,
             max_specials: 5,
             max_special_rarity: Rarity::VeryRare,
-            stock_source: PathBuf::from(r"C:\Users\Jordan\Desktop\code\werlen\stock_source.csv"),
+            stock_source: PathBuf::from(r"/home/jordan/code/werlen/stock_source.csv"),
 
             ..Default::default()
         }
