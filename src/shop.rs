@@ -125,7 +125,6 @@ impl App {
         match (key.modifiers, key.code) {
             (_, KeyCode::Esc | KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-
             (_, KeyCode::Char('r')) => self.update_stock_pools(),
             (_, KeyCode::Char('g')) => self.generate_shop(),
             (_, KeyCode::Char('d')) => self.stock_error = false,
@@ -249,9 +248,33 @@ impl App {
             }
         }
 
-        //while self.special_stock.len() < self.max_specials {
-        //    todo!()
-        //};
+        // specials draw from both pools - item-type entries are capped by
+        // max_special_rarity, scroll-type entries by max_scroll_level
+        let combined_pool: Vec<&StockItem> = self
+            .item_stock_pool
+            .iter()
+            .chain(self.scroll_stock_pool.iter())
+            .collect();
+
+        while self.special_stock.len() < self.max_specials {
+            let chosen_special = combined_pool.choose(&mut rng).unwrap();
+            let passes = match (chosen_special.rarity, chosen_special.level) {
+                (Some(rarity), _) => rarity <= self.max_special_rarity,
+                (_, Some(level)) => level <= self.max_scroll_level,
+                (None, None) => false,
+            };
+            if passes {
+                self.special_stock.push((*chosen_special).clone());
+            }
+        }
+
+        // show scrolls sorted by level, then items sorted by rarity
+        self.special_stock
+            .sort_by_key(|item| match (item.level, item.rarity) {
+                (Some(level), _) => (0u8, level, Rarity::default()),
+                (_, Some(rarity)) => (1u8, 0usize, rarity),
+                (None, None) => (2u8, 0usize, Rarity::default()),
+            });
 
         self.scroll_stock.sort_by_key(|item| item.level.unwrap());
         self.item_stock.sort_by_key(|item| item.rarity.unwrap());
