@@ -96,7 +96,7 @@ pub fn render_footer(frame: &mut Frame, area: Rect, selected_tab: usize) {
     let text = if selected_tab == 3 {
         "q quit   •   ↑/↓ select setting   •   ←/→ adjust value   •   h/l switch tabs"
     } else {
-        "q quit   •   g generate   •   r reload stock   •   h/l switch tabs   •   d dismiss error"
+        "q quit   •   g generate   •   r reload stock   •   h/l switch tabs"
     };
     let footer = Paragraph::new(text)
         .alignment(Alignment::Center)
