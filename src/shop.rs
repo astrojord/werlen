@@ -3,15 +3,12 @@ use std::path::PathBuf;
 use std::{error::Error, fmt, process};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::style::Style;
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Offset},
-    style::Stylize,
-    text::{Line, Span},
+    layout::{Constraint, Layout},
 };
 
-use crate::ui::{render_content, render_stock_error, render_tabs};
+use crate::ui::{render_content, render_footer, render_header, render_stock_error, render_tabs};
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
@@ -80,28 +77,22 @@ impl App {
     /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
     fn render(&mut self, frame: &mut Frame, selected_tab: usize) {
-        let outer_layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)])
-            .spacing(1)
-            .split(frame.area());
-        let top = outer_layout[0];
-        let main = outer_layout[1];
+        let outer_layout = Layout::vertical([
+            Constraint::Length(3), // header
+            Constraint::Length(3), // tab bar
+            Constraint::Fill(1),   // content
+            Constraint::Length(1), // footer / keybinds
+        ])
+        .split(frame.area());
+        let header = outer_layout[0];
+        let tabs = outer_layout[1];
+        let main = outer_layout[2];
+        let footer = outer_layout[3];
 
-        // let inner_layout = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).spacing(1).split(main);
-        // let art = inner_layout[0];
-        // let tabs = inner_layout[1];
-
-        let title = Line::from_iter([
-            Span::from("Werlen's Ware Generator").bold(),
-            Span::from(
-                " (q: quit, g: generate, r: reload stock source, arrow keys: navigate wares)",
-            )
-            .style(Style::new().cyan()),
-        ]);
-        frame.render_widget(title.centered(), top);
-
+        render_header(frame, header);
+        render_tabs(frame, tabs, selected_tab);
         render_content(self, frame, main, selected_tab);
-        // render_werlen(frame, art);
-        render_tabs(frame, main.offset(Offset { x: 1, y: 0 }), selected_tab);
+        render_footer(frame, footer);
 
         if self.stock_error {
             render_stock_error(frame);
