@@ -20,6 +20,9 @@ pub struct App {
     /// Whether the stock source CSV has been loaded, and what happened last time we tried.
     pub stock_status: StockStatus,
 
+    /// Index of the currently highlighted row on the Settings tab (0..=5).
+    pub selected_setting: usize,
+
     /// What tab are we looking at? (mod 4)
     pub tab: usize,
 
@@ -95,7 +98,7 @@ impl App {
         render_header(self, frame, header);
         render_tabs(frame, tabs, selected_tab);
         render_content(self, frame, main, selected_tab);
-        render_footer(frame, footer);
+        render_footer(frame, footer, selected_tab);
 
         if self.stock_error {
             render_stock_error(frame);
@@ -122,12 +125,24 @@ impl App {
         match (key.modifiers, key.code) {
             (_, KeyCode::Esc | KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            // Add other key handlers here.
+
             (_, KeyCode::Char('r')) => self.update_stock_pools(),
             (_, KeyCode::Char('g')) => self.generate_shop(),
             (_, KeyCode::Char('d')) => self.stock_error = false,
-            (_, KeyCode::Char('l') | KeyCode::Right) => self.tab = (self.tab + 1) % 4,
-            (_, KeyCode::Char('h') | KeyCode::Left) => self.tab = (self.tab + 3) % 4,
+            (_, KeyCode::Char('l')) => self.tab = (self.tab + 1) % 4,
+            (_, KeyCode::Char('h')) => self.tab = (self.tab + 3) % 4,
+            (_, KeyCode::Right) => {
+                if self.tab == 3 {
+                    self.adjust_selected_setting(1);
+                }
+            }
+            (_, KeyCode::Left) => {
+                if self.tab == 3 {
+                    self.adjust_selected_setting(-1);
+                }
+            }
+            (_, KeyCode::Up) if self.tab == 3 => self.move_setting_selection(-1),
+            (_, KeyCode::Down) if self.tab == 3 => self.move_setting_selection(1),
             _ => {}
         }
     }
@@ -242,10 +257,52 @@ impl App {
         self.item_stock.sort_by_key(|item| item.rarity.unwrap());
     }
 
-    /// Set running to false to quit the application.
     fn quit(&mut self) {
         self.running = false;
     }
+
+    fn move_setting_selection(&mut self, delta: i32) {
+        const NUM_SETTINGS: i32 = 6;
+        let next = (self.selected_setting as i32 + delta).rem_euclid(NUM_SETTINGS);
+        self.selected_setting = next as usize;
+    }
+
+    fn adjust_selected_setting(&mut self, delta: i32) {
+        const POOL_MAX: usize = 128;
+        match self.selected_setting {
+            0 => self.max_scrolls = bump_usize(self.max_scrolls, delta, POOL_MAX),
+            1 => self.max_scroll_level = bump_usize(self.max_scroll_level, delta, usize::MAX),
+            2 => self.max_items = bump_usize(self.max_items, delta, POOL_MAX),
+            3 => self.max_item_rarity = step_rarity(self.max_item_rarity, delta),
+            4 => self.max_specials = bump_usize(self.max_specials, delta, POOL_MAX),
+            5 => self.max_special_rarity = step_rarity(self.max_special_rarity, delta),
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// change a usize by a signed delta, clamped to [0, max]
+/// used in settings tab
+fn bump_usize(current: usize, delta: i32, max: usize) -> usize {
+    let bumped = if delta < 0 {
+        current.saturating_sub(delta.unsigned_abs() as usize)
+    } else {
+        current.saturating_add(delta as usize)
+    };
+    bumped.min(max)
+}
+
+/// allow stepping through rarity levels in settings tab, clamped at both ends
+fn step_rarity(current: Rarity, delta: i32) -> Rarity {
+    const RARITIES: [Rarity; 5] = [
+        Rarity::Common,
+        Rarity::Uncommon,
+        Rarity::Rare,
+        Rarity::VeryRare,
+        Rarity::Legendary,
+    ];
+    let idx = (current as i32 + delta).clamp(0, RARITIES.len() as i32 - 1);
+    RARITIES[idx as usize]
 }
 
 #[derive(Debug, Default, Clone)]

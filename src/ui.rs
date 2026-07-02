@@ -6,7 +6,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     symbols,
     text::Line,
-    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, Tabs},
+    widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Tabs},
 };
 
 use crate::shop::{App, Rarity, StockStatus};
@@ -73,28 +73,31 @@ fn bordered_block(title: &str) -> Block<'_> {
 pub fn render_header(app: &App, frame: &mut Frame, area: Rect) {
     let (status_text, status_color) = match &app.stock_status {
         StockStatus::NotLoaded => (
-            "● Stock not loaded — press r to load".to_string(),
+            " ● Stock not loaded — press r to load".to_string(),
             Color::Red,
         ),
         StockStatus::Loaded { scrolls, items } => (
-            format!("● Stock loaded — {scrolls} scrolls / {items} items"),
+            format!(" ● Stock loaded — {scrolls} scrolls / {items} items"),
             Color::Green,
         ),
-        StockStatus::Error(msg) => (format!("✕ Load error: {msg}"), Color::Red),
+        StockStatus::Error(msg) => (format!(" ✕ Load error: {msg}"), Color::Red),
     };
 
     let lines = vec![Line::from(status_text).style(Style::new().fg(status_color))];
 
-    let block = bordered_block("Werlen's Ware Generator");
+    let block = bordered_block("Werlen's Ware Generator 🧙");
     let paragraph = Paragraph::new(lines)
         .alignment(Alignment::Left)
         .block(block);
     frame.render_widget(paragraph, area);
 }
 
-pub fn render_footer(frame: &mut Frame, area: Rect) {
-    let text =
-        "q quit   •   g generate   •   r reload stock   •   ←/→ switch tabs   •   d dismiss error";
+pub fn render_footer(frame: &mut Frame, area: Rect, selected_tab: usize) {
+    let text = if selected_tab == 3 {
+        "q quit   •   ↑/↓ select setting   •   ←/→ adjust value   •   h/l switch tabs"
+    } else {
+        "q quit   •   g generate   •   r reload stock   •   h/l switch tabs   •   d dismiss error"
+    };
     let footer = Paragraph::new(text)
         .alignment(Alignment::Center)
         .style(Style::new().fg(FOOTER_FG));
@@ -157,7 +160,7 @@ pub fn render_stock_error(frame: &mut Frame) {
         .border_style(Style::new().fg(Color::Red));
 
     let paragraph = Paragraph::new("Please ensure the shop stock pools have been\nloaded (press 'r') before generating inventory.\n\nPress 'd' to dismiss this message.")
-        .style(Style::new().fg(Color::Rgb(255, 150, 150)))
+        .style(Style::new().fg(Color::White))
         .alignment(Alignment::Center);
 
     let area = centered_rect(60, 25, frame.area());
@@ -179,15 +182,28 @@ pub fn render_settings(app: &mut App, frame: &mut Frame, area: Rect, _selected_t
             app.max_special_rarity.to_string(),
         ),
         (
-            "Stock source path".into(),
+            "Stock source path (read-only)".into(),
             app.stock_source.display().to_string(),
         ),
     ];
 
     let mut rows: Vec<Row<'_>> =
         vec![Row::new(column_names).style(Style::new().fg(TITLE_COLOR).bold())];
-    for (name, value) in data_rows.into_iter() {
-        rows.push(Row::new(vec![Cell::from(name), Cell::from(value)]));
+    for (i, (name, value)) in data_rows.into_iter().enumerate() {
+        let selected = i == app.selected_setting;
+        let marker = if selected { "▶ " } else { "  " };
+        let style = if selected {
+            Style::new().fg(Color::Rgb(255, 210, 120)).bold()
+        } else {
+            Style::new()
+        };
+        rows.push(
+            Row::new(vec![
+                Cell::from(format!("{marker}{name}")),
+                Cell::from(value),
+            ])
+            .style(style),
+        );
     }
 
     let table = Table::new(rows, widths).block(bordered_block("Settings"));
@@ -245,6 +261,7 @@ pub fn render_table(app: &mut App, frame: &mut Frame, area: Rect, selected_tab: 
         rows.push(row);
     }
 
-    let table = Table::new(rows, widths).block(bordered_block(title));
+    let table =
+        Table::new(rows, widths).block(bordered_block(title).padding(Padding::horizontal(1)));
     frame.render_widget(table, area);
 }
