@@ -10,8 +10,10 @@ use ratatui::{
 
 use crate::ui::{render_content, render_footer, render_header, render_stock_error, render_tabs};
 
+/// max spell level within 5e
+const MAX_SCROLL_LEVEL: usize = 9;
+
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub struct App {
     /// Is the application running without error?
     running: bool,
@@ -20,7 +22,7 @@ pub struct App {
     /// Whether the stock source CSV has been loaded, and what happened last time we tried.
     pub stock_status: StockStatus,
 
-    /// Index of the currently highlighted row on the Settings tab (0..=5).
+    /// Index of the currently highlighted row on the settings tab (0..=7).
     pub selected_setting: usize,
 
     /// What tab are we looking at? (mod 4)
@@ -29,10 +31,12 @@ pub struct App {
     /// Settings
     pub max_scrolls: usize,
     pub max_scroll_level: usize,
+    pub min_special_scroll_level: usize,
     pub max_items: usize,
     pub max_item_rarity: Rarity,
     pub max_specials: usize,
     pub max_special_rarity: Rarity,
+    pub min_special_rarity: Rarity,
     pub stock_source: PathBuf,
 
     // Stock pools, populated from stock source
@@ -54,11 +58,13 @@ impl App {
             tab: 0,
             max_scrolls: 20,
             max_scroll_level: 5,
+            min_special_scroll_level: 4,
             max_items: 10,
             max_item_rarity: Rarity::Uncommon,
             max_specials: 5,
             max_special_rarity: Rarity::VeryRare,
-            stock_source: PathBuf::from(r"/home/jordan/code/werlen/stock_source.csv"),
+            min_special_rarity: Rarity::Rare,
+            stock_source: PathBuf::from(r"/home/jordan/code/werlen/stock_source.csv"), // currently readonly - todo
 
             ..Default::default()
         }
@@ -248,8 +254,10 @@ impl App {
             }
         }
 
-        // specials draw from both pools - item-type entries are capped by
-        // max_special_rarity, scroll-type entries by max_scroll_level
+        // specials draw from both pools - item-type entries are bounded by
+        // [min_special_rarity, max_special_rarity]; scroll-type entries by
+        // [min_special_scroll_level, MAX_SCROLL_LEVEL] - note this is independent
+        // of max_scroll_level, which only governs the regular scroll stock
         let combined_pool: Vec<&StockItem> = self
             .item_stock_pool
             .iter()
@@ -259,8 +267,12 @@ impl App {
         while self.special_stock.len() < self.max_specials {
             let chosen_special = combined_pool.choose(&mut rng).unwrap();
             let passes = match (chosen_special.rarity, chosen_special.level) {
-                (Some(rarity), _) => rarity <= self.max_special_rarity,
-                (_, Some(level)) => level <= self.max_scroll_level,
+                (Some(rarity), _) => {
+                    rarity >= self.min_special_rarity && rarity <= self.max_special_rarity
+                }
+                (_, Some(level)) => {
+                    level >= self.min_special_scroll_level && level <= MAX_SCROLL_LEVEL
+                }
                 (None, None) => false,
             };
             if passes {
@@ -285,7 +297,7 @@ impl App {
     }
 
     fn move_setting_selection(&mut self, delta: i32) {
-        const NUM_SETTINGS: i32 = 6;
+        const NUM_SETTINGS: i32 = 8;
         let next = (self.selected_setting as i32 + delta).rem_euclid(NUM_SETTINGS);
         self.selected_setting = next as usize;
     }
@@ -294,11 +306,22 @@ impl App {
         const POOL_MAX: usize = 128;
         match self.selected_setting {
             0 => self.max_scrolls = bump_usize(self.max_scrolls, delta, POOL_MAX),
-            1 => self.max_scroll_level = bump_usize(self.max_scroll_level, delta, 9usize),
-            2 => self.max_items = bump_usize(self.max_items, delta, POOL_MAX),
-            3 => self.max_item_rarity = step_rarity(self.max_item_rarity, delta),
-            4 => self.max_specials = bump_usize(self.max_specials, delta, POOL_MAX),
-            5 => self.max_special_rarity = step_rarity(self.max_special_rarity, delta),
+            1 => self.max_scroll_level = bump_usize(self.max_scroll_level, delta, MAX_SCROLL_LEVEL),
+            2 => {
+                self.min_special_scroll_level =
+                    bump_usize(self.min_special_scroll_level, delta, MAX_SCROLL_LEVEL)
+            }
+            3 => self.max_items = bump_usize(self.max_items, delta, POOL_MAX),
+            4 => self.max_item_rarity = step_rarity(self.max_item_rarity, delta),
+            5 => self.max_specials = bump_usize(self.max_specials, delta, POOL_MAX),
+            6 => {
+                let stepped = step_rarity(self.min_special_rarity, delta);
+                self.min_special_rarity = stepped.min(self.max_special_rarity);
+            }
+            7 => {
+                let stepped = step_rarity(self.max_special_rarity, delta);
+                self.max_special_rarity = stepped.max(self.min_special_rarity);
+            }
             _ => unreachable!(),
         }
     }

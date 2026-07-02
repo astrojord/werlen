@@ -174,9 +174,17 @@ pub fn render_settings(app: &mut App, frame: &mut Frame, area: Rect, _selected_t
     let data_rows: Vec<(String, String)> = vec![
         ("Max scrolls".into(), app.max_scrolls.to_string()),
         ("Max scroll level".into(), app.max_scroll_level.to_string()),
+        (
+            "Min special scroll level".into(),
+            app.min_special_scroll_level.to_string(),
+        ),
         ("Max items".into(), app.max_items.to_string()),
         ("Max item rarity".into(), app.max_item_rarity.to_string()),
         ("Max specials".into(), app.max_specials.to_string()),
+        (
+            "Min special rarity".into(),
+            app.min_special_rarity.to_string(),
+        ),
         (
             "Max special rarity".into(),
             app.max_special_rarity.to_string(),
