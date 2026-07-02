@@ -1,6 +1,6 @@
 use rand::seq::IndexedRandom;
 use std::path::PathBuf;
-use std::{error::Error, fmt, process};
+use std::{error::Error, fmt};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -16,6 +16,9 @@ pub struct App {
     /// Is the application running without error?
     running: bool,
     stock_error: bool,
+
+    /// Whether the stock source CSV has been loaded, and what happened last time we tried.
+    pub stock_status: StockStatus,
 
     /// What tab are we looking at? (mod 4)
     pub tab: usize,
@@ -78,7 +81,7 @@ impl App {
     /// - <https://github.com/ratatui/ratatui/tree/main/ratatui-widgets/examples>
     fn render(&mut self, frame: &mut Frame, selected_tab: usize) {
         let outer_layout = Layout::vertical([
-            Constraint::Length(3), // header
+            Constraint::Length(3), // header (title + status line)
             Constraint::Length(3), // tab bar
             Constraint::Fill(1),   // content
             Constraint::Length(1), // footer / keybinds
@@ -89,7 +92,7 @@ impl App {
         let main = outer_layout[2];
         let footer = outer_layout[3];
 
-        render_header(frame, header);
+        render_header(self, frame, header);
         render_tabs(frame, tabs, selected_tab);
         render_content(self, frame, main, selected_tab);
         render_footer(frame, footer);
@@ -130,21 +133,20 @@ impl App {
     }
 
     fn update_stock_pools(&mut self) {
-        if !self.item_stock_pool.is_empty() {
-            self.item_stock_pool.clear();
-        }
+        self.item_stock_pool.clear();
+        self.scroll_stock_pool.clear();
 
-        if !self.scroll_stock_pool.is_empty() {
-            self.scroll_stock_pool.clear();
+        match self.read_csv() {
+            Ok(()) => {
+                self.stock_status = StockStatus::Loaded {
+                    scrolls: self.scroll_stock_pool.len(),
+                    items: self.item_stock_pool.len(),
+                };
+            }
+            Err(err) => {
+                self.stock_status = StockStatus::Error(err.to_string());
+            }
         }
-
-        if let Err(err) = self.read_csv() {
-            println!("{}", err);
-            process::exit(1);
-        }
-
-        // println!("{:?}", self.scroll_stock_pool);
-        // println!("{:?}", self.item_stock_pool);
     }
 
     fn read_csv(&mut self) -> Result<(), Box<dyn Error>> {
@@ -244,6 +246,17 @@ impl App {
     fn quit(&mut self) {
         self.running = false;
     }
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum StockStatus {
+    #[default]
+    NotLoaded,
+    Loaded {
+        scrolls: usize,
+        items: usize,
+    },
+    Error(String),
 }
 
 #[derive(Debug, Default, PartialEq, PartialOrd, Eq, Ord, Clone, Copy)]

@@ -5,10 +5,11 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
+    text::Line,
     widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, Tabs},
 };
 
-use crate::shop::{App, Rarity};
+use crate::shop::{App, Rarity, StockStatus};
 
 const BORDER_COLOR: Color = Color::Rgb(90, 90, 130);
 const TITLE_COLOR: Color = Color::Rgb(230, 220, 255);
@@ -69,11 +70,24 @@ fn bordered_block(title: &str) -> Block<'_> {
         .border_style(Style::new().fg(BORDER_COLOR))
 }
 
-pub fn render_header(frame: &mut Frame, area: Rect) {
+pub fn render_header(app: &App, frame: &mut Frame, area: Rect) {
+    let (status_text, status_color) = match &app.stock_status {
+        StockStatus::NotLoaded => (
+            "● Stock not loaded — press r to load".to_string(),
+            Color::Red,
+        ),
+        StockStatus::Loaded { scrolls, items } => (
+            format!("● Stock loaded — {scrolls} scrolls / {items} items"),
+            Color::Green,
+        ),
+        StockStatus::Error(msg) => (format!("✕ Load error: {msg}"), Color::Red),
+    };
+
+    let lines = vec![Line::from(status_text).style(Style::new().fg(status_color))];
+
     let block = bordered_block("Werlen's Ware Generator");
-    let paragraph = Paragraph::new("* . ﹢ ˖ ✦ ¸ . ﹢ ° ¸. ° ˖ ･ ·̩ ｡ ☆ ﾟ ＊ ¸* . ﹢ ˖ ✦ ¸ . ﹢")
-        .alignment(Alignment::Center)
-        .style(Style::new().fg(TITLE_COLOR).italic())
+    let paragraph = Paragraph::new(lines)
+        .alignment(Alignment::Left)
         .block(block);
     frame.render_widget(paragraph, area);
 }
