@@ -271,7 +271,7 @@ impl App {
         const POOL_MAX: usize = 128;
         match self.selected_setting {
             0 => self.max_scrolls = bump_usize(self.max_scrolls, delta, POOL_MAX),
-            1 => self.max_scroll_level = bump_usize(self.max_scroll_level, delta, usize::MAX),
+            1 => self.max_scroll_level = bump_usize(self.max_scroll_level, delta, 9usize),
             2 => self.max_items = bump_usize(self.max_items, delta, POOL_MAX),
             3 => self.max_item_rarity = step_rarity(self.max_item_rarity, delta),
             4 => self.max_specials = bump_usize(self.max_specials, delta, POOL_MAX),
