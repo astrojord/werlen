@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Cell, Padding, Paragraph, Row, Table, Tabs},
 };
 
@@ -274,4 +274,21 @@ pub fn render_table(app: &mut App, frame: &mut Frame, area: Rect, selected_tab: 
         .row_highlight_style(Style::new().fg(Color::Rgb(255, 210, 120)).bold())
         .highlight_symbol("▶ ");
     frame.render_stateful_widget(table, area, &mut app.table_states[selected_tab]);
+
+    // rendering the table above updates the TableState's offset to keep the
+    // selected row visible - read it back now so these indicators reflect
+    // this frame's actual scroll position, not the previous one
+    let visible_rows = area.height.saturating_sub(3) as usize; // borders (2) + header (1)
+    let offset = app.table_states[selected_tab].offset();
+    let arrow_style = Style::new().fg(TITLE_COLOR).bold();
+    let arrow_x = area.x + area.width.saturating_sub(3);
+
+    if offset > 0 {
+        let up_area = Rect::new(arrow_x, area.y, 1, 1);
+        frame.render_widget(Span::styled("▲", arrow_style), up_area);
+    }
+    if offset + visible_rows < stock.len() {
+        let down_area = Rect::new(arrow_x, area.y + area.height.saturating_sub(1), 1, 1);
+        frame.render_widget(Span::styled("▼", arrow_style), down_area);
+    }
 }
