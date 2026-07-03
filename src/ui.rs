@@ -96,7 +96,7 @@ pub fn render_footer(frame: &mut Frame, area: Rect, selected_tab: usize) {
     let text = if selected_tab == 3 {
         "q quit   •   ↑/↓ select setting   •   ←/→ adjust value   •   h/l switch tabs"
     } else {
-        "q quit   •   g generate   •   r reload stock   •   h/l switch tabs"
+        "q quit   •   g generate   •   r reload stock   •   ↑/↓ scroll   •   h/l switch tabs"
     };
     let footer = Paragraph::new(text)
         .alignment(Alignment::Center)
@@ -269,7 +269,9 @@ pub fn render_table(app: &mut App, frame: &mut Frame, area: Rect, selected_tab: 
         rows.push(row);
     }
 
-    let table =
-        Table::new(rows, widths).block(bordered_block(title).padding(Padding::horizontal(1)));
-    frame.render_widget(table, area);
+    let table = Table::new(rows, widths)
+        .block(bordered_block(title).padding(Padding::horizontal(1)))
+        .row_highlight_style(Style::new().fg(Color::Rgb(255, 210, 120)).bold())
+        .highlight_symbol("▶ ");
+    frame.render_stateful_widget(table, area, &mut app.table_states[selected_tab]);
 }

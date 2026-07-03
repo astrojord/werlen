@@ -9,6 +9,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
+    widgets::TableState,
 };
 
 use crate::ui::{render_content, render_footer, render_header, render_stock_error, render_tabs};
@@ -22,11 +23,14 @@ pub struct App {
     running: bool,
     stock_error: bool,
 
-    /// Whether the stock source CSV has been loaded, and what happened last time we tried.
+    /// Whether the stock source CSV has been loaded, and what happened last time we tried
     pub stock_status: StockStatus,
 
-    /// Index of the currently highlighted row on the settings tab (0..=7).
+    /// Index of the currently highlighted row on the settings tab (0..=7)
     pub selected_setting: usize,
+
+    /// Scroll/selection state for the Scrolls (0), Items (1), and Specials (2) tables
+    pub table_states: [TableState; 3],
 
     /// What tab are we looking at? (mod 4)
     pub tab: usize,
@@ -59,6 +63,7 @@ impl App {
             running: false,
             stock_error: false,
             tab: 0,
+            table_states: std::array::from_fn(|_| TableState::new().with_selected(Some(1))),
             max_scrolls: 20,
             max_scroll_level: 3,
             min_special_scroll_level: 4,
@@ -149,8 +154,20 @@ impl App {
                     self.adjust_selected_setting(-1);
                 }
             }
-            (_, KeyCode::Up) if self.tab == 3 => self.move_setting_selection(-1),
-            (_, KeyCode::Down) if self.tab == 3 => self.move_setting_selection(1),
+            (_, KeyCode::Up) => {
+                if self.tab == 3 {
+                    self.move_setting_selection(-1);
+                } else {
+                    self.move_table_selection(-1);
+                }
+            }
+            (_, KeyCode::Down) => {
+                if self.tab == 3 {
+                    self.move_setting_selection(1);
+                } else {
+                    self.move_table_selection(1);
+                }
+            }
             _ => {}
         }
     }
@@ -240,6 +257,9 @@ impl App {
         self.scroll_stock.clear();
         self.special_stock.clear();
 
+        // a fresh stock list makes the old selected row meaningless
+        self.table_states = std::array::from_fn(|_| TableState::new().with_selected(Some(1)));
+
         // bucket the pools by tier so weighted picks are a tier draw
         // followed by a uniform draw within that tier
         let item_buckets = bucket_by_rarity(&self.item_stock_pool);
@@ -303,6 +323,24 @@ impl App {
         const NUM_SETTINGS: i32 = 8;
         let next = (self.selected_setting as i32 + delta).rem_euclid(NUM_SETTINGS);
         self.selected_setting = next as usize;
+    }
+
+    /// move the scroll position of whatever table we're looking at
+    fn move_table_selection(&mut self, delta: i32) {
+        let len = match self.tab {
+            0 => self.scroll_stock.len(),
+            1 => self.item_stock.len(),
+            2 => self.special_stock.len(),
+            _ => return,
+        };
+        if len == 0 {
+            return;
+        }
+
+        let state = &mut self.table_states[self.tab];
+        let current = state.selected().unwrap_or(0) as i32;
+        let next = (current + delta).clamp(0, len as i32 - 1) as usize;
+        state.select(Some(next));
     }
 
     fn adjust_selected_setting(&mut self, delta: i32) {
