@@ -1,3 +1,6 @@
+use rand::Rng;
+use rand::distr::Distribution;
+use rand::distr::weighted::WeightedIndex;
 use rand::seq::IndexedRandom;
 use std::path::PathBuf;
 use std::{error::Error, fmt};
@@ -57,7 +60,7 @@ impl App {
             stock_error: false,
             tab: 0,
             max_scrolls: 20,
-            max_scroll_level: 5,
+            max_scroll_level: 3,
             min_special_scroll_level: 4,
             max_items: 10,
             max_item_rarity: Rarity::Uncommon,
@@ -237,46 +240,46 @@ impl App {
         self.scroll_stock.clear();
         self.special_stock.clear();
 
-        // select new stocks
-        while self.item_stock.len() < self.max_items {
-            let chosen_item = self.item_stock_pool.choose(&mut rng).unwrap();
-            if chosen_item.rarity <= Some(self.max_item_rarity) {
-                self.item_stock.push(chosen_item.clone());
-            }
-        }
+        // bucket the pools by tier so weighted picks are a tier draw
+        // followed by a uniform draw within that tier
+        let item_buckets = bucket_by_rarity(&self.item_stock_pool);
+        let level_buckets = bucket_by_level(&self.scroll_stock_pool);
 
-        while self.scroll_stock.len() < self.max_scrolls {
-            // 9 1st, 5 2nd, 3 3rd, 2 4th, 1 5th for a max of 20 with max level 5?
-            // would be better to just weight the individual levels
-            let chosen_scroll = self.scroll_stock_pool.choose(&mut rng).unwrap();
-            if chosen_scroll.level <= Some(self.max_scroll_level) {
-                self.scroll_stock.push(chosen_scroll.clone());
-            }
-        }
-
-        // specials draw from both pools - item-type entries are bounded by
-        // [min_special_rarity, max_special_rarity]; scroll-type entries by
-        // [min_special_scroll_level, MAX_SCROLL_LEVEL] - note this is independent
-        // of max_scroll_level, which only governs the regular scroll stock
-        let combined_pool: Vec<&StockItem> = self
-            .item_stock_pool
-            .iter()
-            .chain(self.scroll_stock_pool.iter())
+        let item_choices: Vec<(u32, &Vec<&StockItem>)> = (0..=self.max_item_rarity as usize)
+            .map(|r| (rarity_weight(r), &item_buckets[r]))
             .collect();
 
+        while self.item_stock.len() < self.max_items {
+            match weighted_pick(&item_choices, &mut rng) {
+                Some(chosen) => self.item_stock.push(chosen.clone()),
+                None => break, // nothing in the pool qualifies; stop rather than spin forever
+            }
+        }
+
+        let scroll_choices: Vec<(u32, &Vec<&StockItem>)> = (0..=self.max_scroll_level)
+            .map(|l| (scroll_level_weight(l), &level_buckets[l]))
+            .collect();
+
+        while self.scroll_stock.len() < self.max_scrolls {
+            match weighted_pick(&scroll_choices, &mut rng) {
+                Some(chosen) => self.scroll_stock.push(chosen.clone()),
+                None => break,
+            }
+        }
+
+        // specials draw from item and scroll tiers combined into a single bucket
+        let special_item_choices = (self.min_special_rarity as usize
+            ..=self.max_special_rarity as usize)
+            .map(|r| (rarity_weight(r), &item_buckets[r]));
+        let special_scroll_choices = (self.min_special_scroll_level..=MAX_SCROLL_LEVEL)
+            .map(|l| (scroll_level_weight(l), &level_buckets[l]));
+        let special_choices: Vec<(u32, &Vec<&StockItem>)> =
+            special_item_choices.chain(special_scroll_choices).collect();
+
         while self.special_stock.len() < self.max_specials {
-            let chosen_special = combined_pool.choose(&mut rng).unwrap();
-            let passes = match (chosen_special.rarity, chosen_special.level) {
-                (Some(rarity), _) => {
-                    rarity >= self.min_special_rarity && rarity <= self.max_special_rarity
-                }
-                (_, Some(level)) => {
-                    level >= self.min_special_scroll_level && level <= MAX_SCROLL_LEVEL
-                }
-                (None, None) => false,
-            };
-            if passes {
-                self.special_stock.push((*chosen_special).clone());
+            match weighted_pick(&special_choices, &mut rng) {
+                Some(chosen) => self.special_stock.push(chosen.clone()),
+                None => break,
             }
         }
 
@@ -349,6 +352,62 @@ fn step_rarity(current: Rarity, delta: i32) -> Rarity {
     ];
     let idx = (current as i32 + delta).clamp(0, RARITIES.len() as i32 - 1);
     RARITIES[idx as usize]
+}
+
+/// sort items into buckets by rarity (index 0 = Common .. 4 = Legendary)
+fn bucket_by_rarity(pool: &[StockItem]) -> [Vec<&StockItem>; 5] {
+    let mut buckets: [Vec<&StockItem>; 5] = std::array::from_fn(|_| Vec::new());
+    for item in pool {
+        if let Some(rarity) = item.rarity {
+            buckets[rarity as usize].push(item);
+        }
+    }
+    buckets
+}
+
+/// sort scrolls into buckets by level (index 0..=MAX_SCROLL_LEVEL).
+fn bucket_by_level(pool: &[StockItem]) -> Vec<Vec<&StockItem>> {
+    let mut buckets: Vec<Vec<&StockItem>> = (0..=MAX_SCROLL_LEVEL).map(|_| Vec::new()).collect();
+    for item in pool {
+        if let Some(level) = item.level {
+            if let Some(bucket) = buckets.get_mut(level) {
+                bucket.push(item);
+            }
+        }
+    }
+    buckets
+}
+
+/// assign weights to rarity levels out of 100
+fn rarity_weight(rarity_index: usize) -> u32 {
+    const WEIGHTS: [u32; 5] = [30, 25, 20, 15, 10];
+    WEIGHTS.get(rarity_index).copied().unwrap_or(1)
+}
+
+/// assign weights to scroll levels (10 - level)
+fn scroll_level_weight(level: usize) -> u32 {
+    ((MAX_SCROLL_LEVEL + 1).saturating_sub(level) as u32).max(1)
+}
+
+/// pick an item from weighted tiers by choosing a tier first
+/// then pick uniformly inside the tier
+/// return none if every bucket is empty
+fn weighted_pick<'a>(
+    choices: &[(u32, &Vec<&'a StockItem>)],
+    rng: &mut impl Rng,
+) -> Option<&'a StockItem> {
+    let nonempty: Vec<&(u32, &Vec<&StockItem>)> = choices
+        .iter()
+        .filter(|(_, bucket)| !bucket.is_empty())
+        .collect();
+    if nonempty.is_empty() {
+        return None;
+    }
+
+    let weights: Vec<u32> = nonempty.iter().map(|(weight, _)| *weight).collect();
+    let dist = WeightedIndex::new(&weights).ok()?;
+    let (_, bucket) = nonempty[dist.sample(rng)];
+    bucket.choose(rng).copied()
 }
 
 #[derive(Debug, Default, Clone)]
