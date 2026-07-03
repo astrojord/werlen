@@ -275,9 +275,7 @@ pub fn render_table(app: &mut App, frame: &mut Frame, area: Rect, selected_tab: 
         .highlight_symbol("▶ ");
     frame.render_stateful_widget(table, area, &mut app.table_states[selected_tab]);
 
-    // rendering the table above updates the TableState's offset to keep the
-    // selected row visible - read it back now so these indicators reflect
-    // this frame's actual scroll position, not the previous one
+    // determine whether or not to show the "more content if you scroll" arrows
     let visible_rows = area.height.saturating_sub(3) as usize; // borders (2) + header (1)
     let offset = app.table_states[selected_tab].offset();
     let arrow_style = Style::new().fg(TITLE_COLOR).bold();
